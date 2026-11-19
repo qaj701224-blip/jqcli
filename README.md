@@ -20,6 +20,16 @@ python -m venv .venv
 .venv/bin/jqcli --env-file .env --format json auth status
 ```
 
+### 临时只读超时重试
+
+网络偶发超时时，可以显式改用仓库内的临时包装器；原 CLI 参数和 JSON 输出方式不变：
+
+```powershell
+& .\scripts\jqcli-read-retry.ps1 --non-interactive --timeout 10 --format json strategy ls --limit 3
+```
+
+包装器只对白名单中的 `strategy ls/show` 与 `backtest ls/show/stats/result/logs` 重试连接、读取或写入阶段的网络超时；一次 CLI 调用最多共享 3 次额外重试。认证失败、HTTP 错误、写命令、登录、克隆及其他非白名单命令都不会重试，也不会自动重新登录。重试提示只写入 stderr，不记录凭据或请求参数。完整边界见 [`docs/temporary-read-retry.md`](docs/temporary-read-retry.md)。
+
 ## 配置与认证
 
 默认会读取当前目录 `.env`，也可以用 `--env-file <path>` 指定。
@@ -394,12 +404,14 @@ jqcli --env-file .env --format json --non-interactive backtest run <strategy_id>
 参数：
 
 - `--start <YYYY-MM-DD>`：必填
-- `--end <YYYY-MM-DD>`：可选，默认本地今日
+- `--end <YYYY-MM-DD>`：可选，默认本地今日。聚宽正式回测结束日不能大于前一个交易日；当天会被接口拒绝。
 - `--capital <amount>`：初始资金
 - `--freq day|minute`：默认 `day`
 - `--compile`：使用编译运行模式
 - `--wait`：轮询详情直到终态或超时
 - `--poll-interval <seconds>`：默认 `5`
+
+15:00 之后若只要当天商品期货分钟线：把回测 `--end` 设为上一交易日，在策略 `initialize` 里对目标合约 `get_price(..., start_date='<当天> 09:00', end_date='<当天> 15:00', frequency='1m')`，再从 `backtest logs` 解析。不要因此把结束日改成当天。
 
 正式回测输出：
 
